@@ -12,7 +12,6 @@ library(Rmisc)
 library(ggrepel)
 library(corrplot)
 
-
 # Uncomment below code to silence "using default ..." warning messages
 # options(warn=-1)
 # If turned off warning messages run below code to turn them back on once script is run
@@ -390,10 +389,10 @@ Charcol
 cat('There are', length(Charcol), 'remaining columns with character values')
 #**************************************************************************************************************************
 #No ordinality, so converting into factors
-all$Foundation <- as.factor(all$Foundation)
-table(all$Foundation)
+# all$Foundation <- as.factor(all$Foundation)
+# table(all$Foundation)
 
-sum(table(all$Foundation))
+# sum(table(all$Foundation))
 
 #No ordinality, so converting into factors
 all$Heating <- as.factor(all$Heating)
@@ -497,7 +496,6 @@ ms <- ggplot(all[!is.na(all$SalePrice),], aes(x=MoSold, y=SalePrice)) +
 ms
 ys
 
-#grid.arrange(ys, ms, widths=c(1,2)) #shite doesnt work
 multiplot(ys,ms) #way better
 
 #MSSubClass to a factor
@@ -525,6 +523,18 @@ CorHigh <- names(which(apply(cor_sorted, 1, function(x) abs(x)>0.5)))
 cor_numVar <- cor_numVar[CorHigh, CorHigh]
 
 corrplot.mixed(cor_numVar, tl.col="black", tl.pos = "lt", tl.cex = 0.7,cl.cex = .7, number.cex=.7)
+
+# Finding variable importance with a Random Forest
+set.seed(7603488)
+quick_RF <- randomForest(x=all[1:1460,-79], y=all$SalePrice[1:1460], ntree=100,importance=TRUE)
+imp_RF <- importance(quick_RF)
+imp_DF <- data.frame(Variables = row.names(imp_RF), MSE = imp_RF[,1])
+imp_DF <- imp_DF[order(imp_DF$MSE, decreasing = TRUE),]
+
+ggplot(imp_DF[1:20,], aes(x=reorder(Variables, MSE), y=MSE, fill=MSE)) + 
+  geom_bar(stat = 'identity') + 
+  labs(x = 'Variables', y= '% increase MSE if variable is randomly permuted') + 
+  coord_flip() + theme(legend.position="none")
 
 #Graphing Imputed Variables
 s1 <- ggplot(data= all, aes(x=GrLivArea)) +
@@ -726,7 +736,7 @@ DFnorm <- predict(PreNum, DFnumeric)
 dim(DFnorm)
 
 #One hot encoding the categorical variables
-#MY RESULTS CHANGE FROM ERIKS HERE******************************************
+
 DFdummies <- as.data.frame(model.matrix(~.-1, DFfactors))
 dim(DFdummies)
 
@@ -792,7 +802,7 @@ label_train <- all$SalePrice[!is.na(all$SalePrice)]
 length(test1)
 length(label_train)
 
-# put our testing & training data into two seperates Dmatrixs objects
+# put our testing & training data into two separate Dmatrixs objects
 dtrain <- xgb.DMatrix(data = as.matrix(train1), label= label_train)
 dtest <- xgb.DMatrix(data = as.matrix(test1))
 
@@ -807,10 +817,12 @@ default_param<-list(
   colsample_bytree=1
 )
 
-xgbcv <- xgb.cv( params = default_param, data = dtrain, nrounds = 1000, nfold = 5, showsd = T, stratified = T, print_every_n = 40, early_stopping_rounds = 10, maximize = F)
+xgbcv <- xgb.cv( params = default_param, data = dtrain, nrounds = 1000, nfold = 5,
+                 showsd = T, stratified = T, print_every_n = 40, early_stopping_rounds = 10, maximize = F)
 
 #train the model using the best iteration found by cross validation
 xgb_mod <- xgb.train(data = dtrain, params=default_param, nrounds = 398)
+
 
 XGBpred <- predict(xgb_mod, dtest)
 predictions_XGB <- exp(XGBpred) #need to reverse the log to the real values
